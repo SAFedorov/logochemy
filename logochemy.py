@@ -17,7 +17,7 @@ def merge(splitting, tokens):
     return [x for x in filter(None, espl)]
 
 
-def merge_e(espl: list, token_seqs: list, text: str):
+def merge_e(espl, token_seqs, text):
     """Merges multiple non-overlapping sequences of tokens. For efficiency, 
     the function operates on extended splittings and additionally requires
     as a string the same text that was splitted.
@@ -36,16 +36,19 @@ def merge_e(espl: list, token_seqs: list, text: str):
     for s in seq_strs:
         nc = len(s)  # The number of characters in the new token
 
-        # Regular expressions for matching the sequences to be merged.
+        # Make a regular expression for matching the sequences to be merged.
         if len(set(s)) == nc:
             sre = re.compile(re.escape(s))
         else:
-            sre = re.compile('(?=(' + re.escape(s) + '))')  # Using look-ahead makes it a little slower but more general
+            # Look-ahead expressions are a little slower but work even 
+            # in the presence of repeated characters in the tokens.
+            sre = re.compile('(?=(' + re.escape(s) + '))') 
 
         for m in sre.finditer(text):
             start = m.start()
             end = start + nc
-            if espl[start] and (end==n or espl[end]):  # The match corresponds to a token
+            if espl[start] and (end==n or espl[end]):  
+                # The match corresponds to an existing pair of tokens
                 espl[start] = text[start:end]
                 for i in range(start+1, end):
                     espl[i] = None
@@ -63,7 +66,7 @@ def count_n(it, n):
 
 
 def bpe_reduce(splitting: list, niter=1):
-    """Byte-pair encoding with the pair selection based on the conditional entropy.
+    """Byte-pair encoding.
 
     Args:
         niter: the number of iteration of token merging.
@@ -162,7 +165,7 @@ def mbe_reduce(splitting: list, nmax=2, niter=1, mpi=1):
         # (n-1)*f*k*ln(k) > 1 should be fulfilled for the merge to be justified
         print(f'Input tokens: {l:8}, f = {freq : 0.2e}, k = {vs}, ' 
               f'(n-1)*f*k*ln(k) = {(len(max_tok)-1)*freq*vs*log(vs) : 0.3f}')
-        
+
         print(f'Replacing {str(rep)}')
 
         espl = merge_e(espl, rep, text)
@@ -205,9 +208,9 @@ def conditional_entropy(p1: float, p2: float, p21: float) -> float:
     """The conditional entropy of two events H(2|1). 
 
     Args:
-        p1 - the probability of event 1. 
-        p2 - the probability of event 2. 
-        p21 - the conditional probability of 2 given 1, p(2|1). 
+        p1: the probability of event 1. 
+        p2: the probability of event 2. 
+        p21: the conditional probability of 2 given 1, p(2|1). 
     """
     
     p2n1 = (p2 - p21 * p1) / (1 - p1)  # p(2 | not 1)
@@ -219,9 +222,9 @@ def mutual_information(p1: float, p2: float, p21: float) -> float:
     """ The mutual information of two events I(1,2) = H(2) - H(2|1). 
 
     Args:
-        p1 - the probability of event 1. 
-        p2 - the probability of event 2. 
-        p21 - the conditional probability of 2 given 1, p(2|1). 
+        p1: the probability of event 1. 
+        p2: the probability of event 2. 
+        p21: the conditional probability of 2 given 1, p(2|1). 
     """
 
     p2n1 = (p2 - p21 * p1) / (1 - p1)  # p(2 | not 1)
