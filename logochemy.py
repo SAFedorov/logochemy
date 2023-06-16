@@ -71,25 +71,13 @@ def bpe_reduce(splitting: list, niter=1):
     Returns:
         A new splitting of the same text, output as a new list of tokens.
     """
-    def xlog2(x, eps=1e-15):
-        return x * log2(x) if x>eps else 0
 
-    def mutual_information(c):
-        # H(c2) - H(c2|c1)
+    def mutual_information_kf(c):
         c1, c2 = c
-
         p1 = token_cnt1[c1] / token_n
         p2 = token_cnt1[c2] / token_n
         p21 = token_cnt2[(c1, c2)] / token_cnt1[c1]  # p(c2|c1)
-        p2n1 = (p2 - p21 * p1) / (1 - p1)  # p(c2 | not c1)
-
-        # p2 = p(c2|c1) * p1 + p(c2 | not c1) * (1 - p1)
-        # p(c2 | not c1) = (p2 - p(c2|c1) * p1) / (1 - p1)
-
-        h2 = - xlog2(p2) - xlog2(1 - p2)  # H(c2)
-        h21 = - (xlog2(p21) + xlog2(1 - p21)) * p1 - (xlog2(p2n1) + xlog2(1 - p2n1)) * (1-p1)  # H(c2|c1)
-
-        return h2 - h21
+        return mutual_information(p1, p2, p21)
     
     text = ''.join(splitting)
     espl = extend_(splitting)
@@ -103,7 +91,7 @@ def bpe_reduce(splitting: list, niter=1):
         token_cnt2 = count_n(filter(None, espl), 2)
 
         # Pair of tokens to merge
-        rep = sorted(token_cnt2, key=mutual_information)[-1]
+        rep = sorted(token_cnt2, key=mutual_information_kf)[-1]
         
         vs = len(token_cnt1)  # The vocabulary size
         print((f'Input tokens: {token_n:8}, vocabulary size = {vs}, '
