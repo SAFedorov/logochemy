@@ -9,9 +9,7 @@ def merge(splitting, tokens):
 
     # Prepares an extended splitting.
     # ['abcd', 'de', 'f'] -> ['abcd', None, None, None, 'de', None, 'f']
-    espl = []
-    for t in splitting:
-        espl.extend([t] + [None]*(len(t)-1))
+    espl = extend_(splitting)
 
     text = ''.join(splitting)
     espl = merge_e(espl, (tokens,), text)
@@ -94,12 +92,7 @@ def bpe_reduce(splitting: list, niter=1):
         return h2 - h21
     
     text = ''.join(splitting)
-
-    # Prepares an extended splitting.
-    # ['abcd', 'de', 'f'] -> ['abcd', None, None, None, 'de', None, 'f']
-    espl = []
-    for t in splitting:
-        espl.extend([t] + [None]*(len(t)-1))
+    espl = extend_(splitting)
 
     for _ in range(niter):
 
@@ -151,12 +144,7 @@ def mbe_reduce(splitting: list, nmax=2, niter=1, mpi=1):
         return n * (len(t)-1)
     
     text = ''.join(splitting)
-
-    # Prepares an extended splitting.
-    # ['abcd', 'de', 'f'] -> ['abcd', None, None, None, 'de', None, 'f']
-    espl = []
-    for t in splitting:
-        espl.extend([t] + [None]*(len(t)-1))
+    espl = extend_(splitting)
 
     for _ in range(niter):
         token_cnts = [count_n(filter(None, espl), i) for i in range(2, nmax+1)]
@@ -205,10 +193,7 @@ def mbe_reduce_from_log(splitting: list, file_name: str):
     print(f'Initial tokens: {len(splitting):8}')
 
     text = ''.join(splitting)
-
-    espl = []
-    for t in splitting:
-        espl.extend([t] + [None]*(len(t)-1))
+    espl = extend_(splitting)
 
     with open(file_name, 'r') as f:
         for i, line in enumerate(f):
@@ -256,3 +241,15 @@ def mutual_information(p1: float, p2: float, p21: float) -> float:
     h21 = - ((xlog2(p21) + xlog2(1 - p21)) * p1 
              + (xlog2(p2n1) + xlog2(1 - p2n1)) * (1-p1))  # H(2|1)
     return h2 - h21
+
+
+def extend_(spl: list) -> list:
+    """Augments the splitting of a text into tokens by empty entries such that 
+    the length of the list matches the number of characters in the text.
+
+    ['abcd', 'de', 'f'] -> ['abcd', None, None, None, 'de', None, 'f']
+    """
+    espl = []
+    for t in spl:
+        espl.extend([t] + [None]*(len(t)-1))
+    return espl
