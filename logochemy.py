@@ -4,6 +4,130 @@ from collections import Counter
 from itertools import tee
 
 
+def bpe_reduce(splitting: list, niter=1, kf="freq"):
+    """Byte-pair encoding - merges the neighbouring tokens selected according 
+    to the key function (most frequent pairs by default).
+
+    Args:
+        splitting: the list of strings whose totality is the text to be encoded.
+        niter: the number of iterations of token merging.
+        kf: the key function. Can be "freq" for pair frequency or "mi" for a
+            mutual-information-like metric.
+    
+    Returns:
+        A new splitting of the same text, output as a new list of tokens.
+
+    Example:
+        ['a', 'm', 'a', 'm', 'd'] -> ['am', 'am', 'd']
+    """
+
+    def freq_kf(c):
+        """ The key function to sort the token pairs by the number of repetitions."""
+        return token_cnt2[c]
+
+    def mutual_information_kf(c):
+        c1, c2 = c
+        p1 = token_cnt1[c1] / token_n
+        p2 = token_cnt1[c2] / token_n
+        p21 = token_cnt2[(c1, c2)] / token_cnt1[c1]  # p(c2|c1)
+        return mutual_information(p1, p2, p21)
+    
+    if kf == "mi":
+        kf = mutual_information_kf
+    else:
+        kf = freq_kf
+    
+    text = ''.join(splitting)
+    espl = extend_(splitting)
+
+    for _ in range(niter):
+        token_n = len(espl) - espl.count(None)
+
+        # Counts tokens and pairs
+        token_cnt1 = Counter(filter(None, espl)) 
+        token_cnt2 = counter_n(filter(None, espl), 2)
+
+        # Pair of tokens to merge
+        rep = sorted(token_cnt2, key=kf)[-1]
+        
+        vs = len(token_cnt1)  # The vocabulary size
+        print((f'Input tokens: {token_n:8}, vocabulary size = {vs}, '
+               f'n(c1) = {token_cnt1[rep[0]]:6}, n(c2) = {token_cnt1[rep[1]]:6},' 
+               f' n(c1, c2) = {token_cnt2[rep]:6}.'))
+        print(f'Replacing {str(rep)}')
+
+        espl = merge_e(espl, (rep,), text=text)
+
+    return [x for x in filter(None, espl)]  # Returns a normal splitting
+
+
+def mbe_reduce(splitting: list, nmax=2, niter=1, mpi=1):
+    """Reduces the splitting of a text given as a list of string tokens 
+    by merging the most frequent n-token sequences of the lenght at most nmax.
+    mpi non-overlapping token sequences can be merged at a time.
+    
+    Byte-pair encoding (BPE) is realized by the default settings, nmax=2, mpi=1.
+
+    Args:
+        splitting: the list of strings whose totality is the text to be encoded.
+        nmax: the maximum length of the sequence of tokens to be replaced 
+            by a single token at a time.
+        mpi: the number of merges per one iteration of frequency counting. More 
+            merges per iteration make the encoding faster but less dense.
+        niter: the number of iteration of token merging.
+    
+    Returns:
+        A new splitting of the same text, output as a new list of tokens.
+    """
+
+    def kf(cnt: Counter):
+        """ The key function used to sort the list of counters of repetitions 
+        of n-token sequences according to the expected reduction in the 
+        total number of tokens if the most frequent sequence of length n 
+        is merged into one token."""
+
+        t, n = cnt.most_common(1)[0]  # (token sequence, number of counts)
+        return n * (len(t)-1)
+    
+    text = ''.join(splitting)
+    espl = extend_(splitting)
+
+    for _ in range(niter):
+        token_cnts = [counter_n(filter(None, espl), i) for i in range(2, nmax+1)]
+        rep = []  # Sequences of tokens to merge
+        affected_tok = []
+
+        for i in range(mpi):
+            max_cnt = max(token_cnts, key=kf)
+            max_tok, max_count = max_cnt.most_common(1)[0]
+            rep.append(max_tok)
+            affected_tok.extend(max_tok)
+
+            if i < mpi-1:
+                # Sets the counts of sequences of tokens overlapping with the 
+                # previously picked sequences to -1, thus precluding them from 
+                # being picked in the next round. 
+                # No need for this on the last step.
+                for cnt in token_cnts:
+                    for k in cnt:
+                        if any(tok in k for tok in affected_tok):
+                            cnt[k] = -1
+        
+        vs = len(Counter(filter(None, espl)))  # The vocabulary size
+        l = len(espl) - espl.count(None)
+        freq = max_count / l  # The frequency of the last merged combination
+        
+        # (n-1)*f*k*ln(k) > 1 should be fulfilled for the merge to be justified
+        print(f'Input tokens: {l:8}, f = {freq : 0.2e}, k = {vs}, ' 
+              f'(n-1)*f*k*ln(k) = {(len(max_tok)-1)*freq*vs*log(vs) : 0.3f}')
+
+        print(f'Replacing {str(rep)}')
+
+        espl = merge_e(espl, rep, text)
+
+    return [x for x in filter(None, espl)]  # Returns a normal splitting
+
+
 def merge(splitting, tokens):
     """Merges sequences of tokens in the splitting of a text."""
 
@@ -56,121 +180,13 @@ def merge_e(espl, token_seqs, text):
     return espl
 
 
-def count_n(it, n):
+def counter_n(it, n):
     """Counts overlapping n-element sequences from an iterator."""
     il = tee(it, n)
     for i, iter_i in enumerate(il):
         for _ in range(i):
             next(iter_i)
     return Counter(zip(*il))
-
-
-def bpe_reduce(splitting: list, niter=1):
-    """Byte-pair encoding.
-
-    Args:
-        niter: the number of iteration of token merging.
-    
-    Returns:
-        A new splitting of the same text, output as a new list of tokens.
-    """
-
-    def mutual_information_kf(c):
-        c1, c2 = c
-        p1 = token_cnt1[c1] / token_n
-        p2 = token_cnt1[c2] / token_n
-        p21 = token_cnt2[(c1, c2)] / token_cnt1[c1]  # p(c2|c1)
-        return mutual_information(p1, p2, p21)
-    
-    text = ''.join(splitting)
-    espl = extend_(splitting)
-
-    for _ in range(niter):
-
-        token_n = len(espl) - espl.count(None)
-
-        # Counts tokens and pairs
-        token_cnt1 = Counter(filter(None, espl)) 
-        token_cnt2 = count_n(filter(None, espl), 2)
-
-        # Pair of tokens to merge
-        rep = sorted(token_cnt2, key=mutual_information_kf)[-1]
-        
-        vs = len(token_cnt1)  # The vocabulary size
-        print((f'Input tokens: {token_n:8}, vocabulary size = {vs}, '
-               f'n(c1) = {token_cnt1[rep[0]]:6}, n(c2) = {token_cnt1[rep[1]]:6},' 
-               f' n(c1, c2) = {token_cnt2[rep]:6}.'))
-        print(f'Replacing {str(rep)}')
-
-        espl = merge_e(espl, (rep,), text=text)
-
-    return [x for x in filter(None, espl)]  # Returns a normal splitting
-
-
-def mbe_reduce(splitting: list, nmax=2, niter=1, mpi=1):
-    """Reduces the splitting of a text given as a list of string tokens 
-    by merging the most frequent n-token sequences of the lenght at most nmax.
-    mpi non-overlapping token sequences can be merged at a time.
-    
-    Byte-pair encoding (BPE) is realized by the default settings, nmax=2, mpi=1.
-
-    Args:
-        nmax: the maximum length of the sequence of tokens to be replaced 
-            by a single token at a time.
-        mpi: the number of merges per one iteration of frequency counting. More 
-            merges per iteration make the encoding faster but less dense.
-        niter: the number of iteration of token merging.
-    
-    Returns:
-        A new splitting of the same text, output as a new list of tokens.
-    """
-
-    def kf(cnt: Counter):
-        """ The key function used to sort the list of counters of repetitions 
-        of n-token sequences according to the expected reduction in the 
-        total number of tokens if the most frequent sequence of length n 
-        is merged into one token."""
-
-        t, n = cnt.most_common(1)[0]  # (token sequence, number of counts)
-        return n * (len(t)-1)
-    
-    text = ''.join(splitting)
-    espl = extend_(splitting)
-
-    for _ in range(niter):
-        token_cnts = [count_n(filter(None, espl), i) for i in range(2, nmax+1)]
-        rep = []  # Sequences of tokens to merge
-        affected_tok = []
-
-        for i in range(mpi):
-            max_cnt = max(token_cnts, key=kf)
-            max_tok, max_count = max_cnt.most_common(1)[0]
-            rep.append(max_tok)
-            affected_tok.extend(max_tok)
-
-            if i < mpi-1:
-                # Sets the counts of sequences of tokens overlapping with the 
-                # previously picked sequences to -1, thus precluding them from 
-                # being picked in the next round. 
-                # No need for this on the last step.
-                for cnt in token_cnts:
-                    for k in cnt:
-                        if any(tok in k for tok in affected_tok):
-                            cnt[k] = -1
-        
-        vs = len(Counter(filter(None, espl)))  # The vocabulary size
-        l = len(espl) - espl.count(None)
-        freq = max_count / l  # The frequency of the last merged combination
-        
-        # (n-1)*f*k*ln(k) > 1 should be fulfilled for the merge to be justified
-        print(f'Input tokens: {l:8}, f = {freq : 0.2e}, k = {vs}, ' 
-              f'(n-1)*f*k*ln(k) = {(len(max_tok)-1)*freq*vs*log(vs) : 0.3f}')
-
-        print(f'Replacing {str(rep)}')
-
-        espl = merge_e(espl, rep, text)
-
-    return [x for x in filter(None, espl)]  # Returns a normal splitting
 
 
 def mbe_reduce_from_log(splitting: list, file_name: str):
@@ -198,6 +214,21 @@ def mbe_reduce_from_log(splitting: list, file_name: str):
     new_splitting = [x for x in filter(None, espl)]
     print(f'Final tokens: {len(new_splitting):8}')
     return new_splitting
+
+
+def extend_(spl: list) -> list:
+    """Augments the splitting of a text into tokens by empty entries such that 
+    the length of the list matches the number of characters in the text.
+
+    ['abcd', 'de', 'f'] -> ['abcd', None, None, None, 'de', None, 'f']
+    """
+    espl = []
+    for t in spl:
+        espl.extend([t] + [None]*(len(t)-1))
+    return espl
+
+
+# Various metrics for determining the priority in token merging ---------------
 
 
 def xlog2(x, eps=1e-15):
@@ -232,15 +263,3 @@ def mutual_information(p1: float, p2: float, p21: float) -> float:
     h21 = - ((xlog2(p21) + xlog2(1 - p21)) * p1 
              + (xlog2(p2n1) + xlog2(1 - p2n1)) * (1-p1))  # H(2|1)
     return h2 - h21
-
-
-def extend_(spl: list) -> list:
-    """Augments the splitting of a text into tokens by empty entries such that 
-    the length of the list matches the number of characters in the text.
-
-    ['abcd', 'de', 'f'] -> ['abcd', None, None, None, 'de', None, 'f']
-    """
-    espl = []
-    for t in spl:
-        espl.extend([t] + [None]*(len(t)-1))
-    return espl
