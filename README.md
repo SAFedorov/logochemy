@@ -6,23 +6,19 @@
  ```python
 from logochemy import bpe_reduce
 
-text = list("per aspera ad astra")
-bpe_reduce(text, niter=4)
+text = list("per aspera")
+bpe_reduce(text, niter=2)
  ```
-produces the merge log
+performs the merge sequence
 ```
-Input tokens:       19, vocabulary size = 8, n(c1) =      3, n(c2) =      5, n(c1, c2) =      3.
-Replacing (' ', 'a')
-Input tokens:       16, vocabulary size = 8, n(c1) =      3, n(c2) =      2, n(c1, c2) =      2.
-Replacing ('r', 'a')
-Input tokens:       14, vocabulary size = 8, n(c1) =      3, n(c2) =      2, n(c1, c2) =      2.
-Replacing (' a', 's')
-Input tokens:       12, vocabulary size = 8, n(c1) =      2, n(c2) =      2, n(c1, c2) =      2.
-Replacing ('p', 'e')
+Input tokens:       10, vocabulary size = 6, n(c1) =      2, n(c2) =      2, n(c1, c2) =      2.
+Replacing ('e', 'r')
+Input tokens:        8, vocabulary size = 5, n(c1) =      2, n(c2) =      2, n(c1, c2) =      2.
+Replacing ('p', 'er')
 ```
 and outputs
 ```
-['pe', 'r', ' as', 'pe', 'ra', ' a', 'd', ' as', 't', 'ra']
+['per', ' ', 'a', 's', 'per', 'a']
 ```
 
 `mbe_reduce` is similar, but can merge multiple tokens in one go, e.g.
@@ -30,16 +26,16 @@ and outputs
 from logochemy import mbe_reduce
 
 text = list("per aspera ad astra")
-mbe_reduce(text, nmax=6, niter=2)
+mbe_reduce(text, nmax=4, niter=2)
 ```
 merges
 ```
-Input tokens:       19, f =  5.26e-02, k = 8, (n-1)*f*k*ln(k) =  4.378
-Replacing [('p', 'e', 'r', ' ', 'a', 's')]
-Input tokens:       14, f =  7.14e-02, k = 9, (n-1)*f*k*ln(k) =  7.063
-Replacing [('per as', 'p', 'e', 'r', 'a', ' ')]
+Input tokens:       19, f =  1.05e-01, k = 8, (n-1)*f*k*ln(k) =  3.502
+Replacing [('p', 'e', 'r')]
+Input tokens:       15, f =  1.33e-01, k = 7, (n-1)*f*k*ln(k) =  3.632
+Replacing [(' ', 'a', 's')]
 ```
 and outputs
 ```
-['per aspera ', 'a', 'd', ' ', 'a', 's', 't', 'r', 'a']
+['per', ' as', 'per', 'a', ' ', 'a', 'd', ' as', 't', 'r', 'a']
 ```

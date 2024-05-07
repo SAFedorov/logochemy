@@ -9,10 +9,14 @@ def bpe_reduce(splitting: list, niter=1, kf="freq"):
     to the key function (most frequent pairs by default).
 
     Args:
-        splitting: the list of strings whose totality is the text to be encoded.
-        niter: the number of iterations of token merging.
-        kf: the key function. Can be "freq" for pair frequency or "mi" for a
-            mutual-information-like metric.
+        splitting: 
+            The list of strings whose totality is the text to be encoded.
+        niter: 
+            The number of iterations of token merging.
+        kf ("freq", "mi", "ce"): 
+            The key function. Can be "freq" for pair frequency, or "mi" for a
+            mutual-information-like metric, or "ce" for a conditional-entropy
+            -like metric.
     
     Returns:
         A new splitting of the same text, output as a new list of tokens.
@@ -32,8 +36,28 @@ def bpe_reduce(splitting: list, niter=1, kf="freq"):
         p21 = token_cnt2[(c1, c2)] / token_cnt1[c1]  # p(c2|c1)
         return mutual_information(p1, p2, p21)
     
+    def neg_conditional_entropy_kf(c):
+        # -(H(c2) - H(c2|c1))
+        c1, c2 = c
+        h = 0
+
+        # Penalties for low-frequency pairs. 
+        if token_cnt2[(c1, c2)] < 1000:
+            h += 100
+        elif token_cnt2[(c1, c2)] < 100:
+            h += 1000
+        elif token_cnt2[(c1, c2)] < 10:
+            h += 10000
+
+        p1 = token_cnt1[c1] / token_n
+        p2 = token_cnt1[c2] / token_n
+        p21 = token_cnt2[(c1, c2)] / token_cnt1[c1]  # p(c2|c1)
+        return -(h + conditional_entropy(p1, p2, p21))
+    
     if kf == "mi":
         kf = mutual_information_kf
+    elif kf == "mi":
+        kf = neg_conditional_entropy_kf
     else:
         kf = freq_kf
     
