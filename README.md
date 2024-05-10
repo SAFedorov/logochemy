@@ -46,6 +46,7 @@ Replacing (' ', 'th')
 Output text length in tokens: 73
 Output vocabulary size: 24
 ```
+This token merger reduced the estimated entropy of the text regarded as a random sequence of symbols from the vocabulary from `84 * log(22)`, which equals about 260, to `76 * log(24)`, which equals about 242.
 
 `mbe_reduce` is similar, but can merge multiple tokens in one go, e.g.
 ```python
